@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin – Weilovka Mapa</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600&display=swap');
+
+    :root {
+      --teal: #009B8D; --teal-dark: #007a6e;
+      --navy: #1a2a4a; --gray: #f4f4f4;
+      --red: #c0392b; --green: #27ae60;
+      --font-head: 'Montserrat', sans-serif;
+      --font-body: 'Open Sans', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-body); background: var(--gray); color: var(--navy); min-height: 100vh; }
+
+    /* TOPBAR */
+    .topbar { background: var(--navy); color: white; padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; }
+    .topbar h1 { font-family: var(--font-head); font-size: 16px; font-weight: 800; letter-spacing: .05em; }
+    .topbar h1 span { color: var(--teal); }
+    .btn-logout { background: none; border: 1px solid rgba(255,255,255,.4); color: white; font-family: var(--font-head); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 6px 14px; cursor: pointer; transition: all .2s; }
+    .btn-logout:hover { background: rgba(255,255,255,.1); }
+
+    /* CARD */
+    .card { background: white; border-radius: 2px; box-shadow: 0 2px 12px rgba(0,0,0,.07); padding: 32px; margin: 32px auto; max-width: 900px; }
+    .card h2 { font-family: var(--font-head); font-size: 16px; font-weight: 700; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid var(--teal); }
+
+    /* LOGIN */
+    #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .login-box { background: white; padding: 48px; width: 380px; box-shadow: 0 4px 24px rgba(0,0,0,.1); }
+    .login-box h2 { font-family: var(--font-head); font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+    .login-box p { font-size: 13px; color: #777; margin-bottom: 28px; }
+    .login-box label { font-family: var(--font-head); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; display: block; margin-bottom: 6px; }
+    .login-box input { width: 100%; padding: 10px 12px; border: 1px solid #ccc; font-family: var(--font-body); font-size: 14px; margin-bottom: 16px; outline: none; transition: border .2s; }
+    .login-box input:focus { border-color: var(--teal); }
+    .login-error { color: var(--red); font-size: 13px; margin-bottom: 12px; display: none; }
+
+    /* BUTTONS */
+    .btn { font-family: var(--font-head); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; padding: 11px 24px; border: none; cursor: pointer; transition: background .2s; }
+    .btn-primary { background: var(--teal); color: white; }
+    .btn-primary:hover { background: var(--teal-dark); }
+    .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+    .btn-danger { background: var(--red); color: white; }
+    .btn-danger:hover { background: #a93226; }
+    .btn-success { background: var(--green); color: white; }
+    .btn-success:hover { background: #229954; }
+    .btn-outline { background: none; border: 1px solid var(--teal); color: var(--teal); }
+    .btn-outline:hover { background: var(--teal); color: white; }
+
+    /* UPLOAD */
+    .upload-area { border: 2px dashed #ccc; padding: 40px; text-align: center; cursor: pointer; transition: border .2s; margin-bottom: 20px; }
+    .upload-area:hover, .upload-area.dragover { border-color: var(--teal); background: #f0faf9; }
+    .upload-area p { font-size: 14px; color: #777; margin-top: 8px; }
+    .upload-area strong { font-family: var(--font-head); font-size: 15px; }
+    #file-input { display: none; }
+    .file-chosen { font-size: 13px; color: var(--teal); font-weight: 600; margin-bottom: 16px; }
+
+    /* PROGRESS */
+    .progress-bar-wrap { background: #eee; height: 6px; border-radius: 3px; margin: 16px 0; }
+    .progress-bar { height: 6px; background: var(--teal); border-radius: 3px; transition: width .3s; }
+
+    /* RESULTS TABLE */
+    .results-summary { display: flex; gap: 24px; margin-bottom: 20px; }
+    .summary-box { flex: 1; padding: 16px; border-radius: 2px; text-align: center; }
+    .summary-box .num { font-family: var(--font-head); font-size: 28px; font-weight: 800; }
+    .summary-box .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+    .box-total { background: #eaf4fb; color: var(--navy); }
+    .box-ok    { background: #eafaf1; color: var(--green); }
+    .box-fail  { background: #fdf2f2; color: var(--red); }
+
+    .results-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .results-table th { font-family: var(--font-head); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 10px 12px; text-align: left; border-bottom: 2px solid var(--teal); background: white; position: sticky; top: 0; }
+    .results-table td { padding: 9px 12px; border-bottom: 1px solid #eee; }
+    .results-table tr.row-ok td { background: #f9fffe; }
+    .results-table tr.row-fail td { background: #fff8f8; }
+    .badge { display: inline-block; font-family: var(--font-head); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; }
+    .badge-ok     { background: #eafaf1; color: var(--green); }
+    .badge-fail   { background: #fdf2f2; color: var(--red); }
+    .badge-cached { background: #eaf4fb; color: #2980b9; }
+    .error-msg { color: var(--red); font-size: 12px; }
+
+    .table-scroll { max-height: 420px; overflow-y: auto; border: 1px solid #eee; }
+    .table-scroll::-webkit-scrollbar { width: 4px; }
+    .table-scroll::-webkit-scrollbar-thumb { background: var(--teal); }
+
+    .action-row { display: flex; gap: 12px; margin-top: 20px; align-items: center; }
+    .action-row p { font-size: 13px; color: #777; }
+
+    /* ALERT */
+    .alert { padding: 14px 18px; border-radius: 2px; font-size: 13px; margin-bottom: 16px; display: none; }
+    .alert-error   { background: #fdf2f2; color: var(--red); border-left: 3px solid var(--red); }
+    .alert-success { background: #eafaf1; color: var(--green); border-left: 3px solid var(--green); }
+
+    /* HIDDEN */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <h2>WEI<span style="color:var(--teal)">LOVKA</span></h2>
+    <p>Administrace mapy partnerských servisů</p>
+    <div class="login-error" id="login-error">Nesprávné jméno nebo heslo.</div>
+    <label>Uživatelské jméno</label>
+    <input type="text" id="username" autocomplete="username" />
+    <label>Heslo</label>
+    <input type="password" id="password" autocomplete="current-password" />
+    <button class="btn btn-primary" style="width:100%" onclick="login()">Přihlásit se</button>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="admin-panel" class="hidden">
+
+  <div class="topbar">
+    <h1>WEI<span>LOVKA</span> – Admin panel</h1>
+    <button class="btn-logout" onclick="logout()">Odhlásit se</button>
+  </div>
+
+  <!-- STATUS CARD -->
+  <div class="card">
+    <h2>Stav dat</h2>
+    <div class="results-summary">
+      <div class="summary-box box-total"><div class="num" id="stat-total">—</div><div class="lbl">Celkem firem</div></div>
+      <div class="summary-box box-ok"><div class="num" id="stat-geocoded">—</div><div class="lbl">Geokódováno</div></div>
+      <div class="summary-box box-fail"><div class="num" id="stat-missing">—</div><div class="lbl">Chybí souřadnice</div></div>
+    </div>
+  </div>
+
+  <!-- UPLOAD CARD -->
+  <div class="card">
+    <h2>Nahrát nový CSV</h2>
+
+    <div class="alert alert-error" id="upload-error"></div>
+    <div class="alert alert-success" id="upload-success"></div>
+
+    <!-- Step 1: choose file -->
+    <div id="step-upload">
+      <div class="upload-area" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <strong>📂 Klikněte nebo přetáhněte CSV soubor</strong>
+        <p>Soubor musí mít stejnou strukturu jako aktuální data_source.csv</p>
+      </div>
+      <input type="file" id="file-input" accept=".csv" onchange="fileChosen(this)" />
+      <div class="file-chosen hidden" id="file-name"></div>
+      <button class="btn btn-primary" id="btn-validate" disabled onclick="validateCSV()">
+        Ověřit a geokódovat adresy
+      </button>
+    </div>
+
+    <!-- Step 2: validation in progress -->
+    <div id="step-validating" class="hidden">
+      <p style="margin-bottom:12px">Probíhá ověřování adres přes Mapy.com API…</p>
+      <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar" style="width:0%"></div></div>
+      <p id="progress-label" style="font-size:13px;color:#777;margin-top:8px">Připravuji…</p>
+    </div>
+
+    <!-- Step 3: results -->
+    <div id="step-results" class="hidden">
+      <div class="results-summary">
+        <div class="summary-box box-total"><div class="num" id="val-total">0</div><div class="lbl">Celkem adres</div></div>
+        <div class="summary-box box-ok"><div class="num" id="val-ok">0</div><div class="lbl">Úspěšně</div></div>
+        <div class="summary-box box-fail"><div class="num" id="val-fail">0</div><div class="lbl">Selhalo</div></div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>Firma</th>
+              <th>Adresa</th>
+              <th>Stav</th>
+              <th>Souřadnice</th>
+              <th>Chyba</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn-outline" onclick="resetUpload()">← Nahrát jiný soubor</button>
+        <button class="btn btn-success" id="btn-commit" onclick="commitCSV()">
+          ✓ Potvrdit a uložit data
+        </button>
+        <p id="commit-warning" style="color:var(--red);font-size:12px;"></p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const API = '/api';
+  let chosenFile = null;
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+
+  async function checkLogin() {
+    const res = await fetch(`${API}/admin/me`, { credentials: 'include' });
+    const data = await res.json();
+    if (data.logged_in) showAdmin();
+  }
+
+  async function login() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+
+    const res = await fetch(`${API}/admin/login`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showAdmin();
+    } else {
+      errEl.style.display = 'block';
+    }
+  }
+
+  async function logout() {
+    await fetch(`${API}/admin/logout`, { method: 'POST', credentials: 'include' });
+    location.reload();
+  }
+
+  function showAdmin() {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('admin-panel').classList.remove('hidden');
+    loadStatus();
+  }
+
+  // ── Status ────────────────────────────────────────────────────────────────
+
+  async function loadStatus() {
+    const res = await fetch(`${API}/status`);
+    const d = await res.json();
+    document.getElementById('stat-total').textContent    = d.total;
+    document.getElementById('stat-geocoded').textContent = d.geocoded;
+    document.getElementById('stat-missing').textContent  = d.missing;
+  }
+
+  // ── Upload ────────────────────────────────────────────────────────────────
+
+  function fileChosen(input) {
+    chosenFile = input.files[0];
+    if (!chosenFile) return;
+    const nameEl = document.getElementById('file-name');
+    nameEl.textContent = `Vybraný soubor: ${chosenFile.name}`;
+    nameEl.classList.remove('hidden');
+    document.getElementById('btn-validate').disabled = false;
+    hideAlerts();
+  }
+
+  // Drag & drop
+  const dropZone = document.getElementById('drop-zone');
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      chosenFile = file;
+      document.getElementById('file-name').textContent = `Vybraný soubor: ${file.name}`;
+      document.getElementById('file-name').classList.remove('hidden');
+      document.getElementById('btn-validate').disabled = false;
+    }
+  });
+
+  async function validateCSV() {
+    if (!chosenFile) return;
+    hideAlerts();
+
+    // Show progress
+    document.getElementById('step-upload').classList.add('hidden');
+    document.getElementById('step-validating').classList.remove('hidden');
+
+    // Animate progress bar (fake — real progress comes with result)
+    let pct = 0;
+    const ticker = setInterval(() => {
+      pct = Math.min(pct + 2, 85);
+      document.getElementById('progress-bar').style.width = pct + '%';
+      document.getElementById('progress-label').textContent = `Geokóduji adresy… (${pct}%)`;
+    }, 300);
+
+    const formData = new FormData();
+    formData.append('file', chosenFile);
+
+    try {
+      const res = await fetch(`${API}/admin/validate`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      const data = await res.json();
+      clearInterval(ticker);
+
+      if (!res.ok) {
+        showError(data.error || 'Chyba při validaci');
+        resetUpload();
+        return;
+      }
+
+      document.getElementById('progress-bar').style.width = '100%';
+      setTimeout(() => showResults(data), 400);
+
+    } catch (e) {
+      clearInterval(ticker);
+      showError('Chyba připojení k serveru: ' + e.message);
+      resetUpload();
+    }
+  }
+
+  function showResults(data) {
+    document.getElementById('step-validating').classList.add('hidden');
+    document.getElementById('step-results').classList.remove('hidden');
+
+    document.getElementById('val-total').textContent = data.total;
+    document.getElementById('val-ok').textContent    = data.ok;
+    document.getElementById('val-fail').textContent  = data.failed;
+
+    // Populate table
+    const tbody = document.getElementById('results-body');
+    tbody.innerHTML = '';
+    for (const r of data.results) {
+      const tr = document.createElement('tr');
+      tr.className = r.status === 'ok' ? 'row-ok' : 'row-fail';
+
+      const statusBadge = r.status === 'ok'
+        ? `<span class="badge badge-ok">✓ OK</span>${r.cached ? ' <span class="badge badge-cached">cache</span>' : ''}`
+        : `<span class="badge badge-fail">✗ Selhalo</span>`;
+
+      const coords = r.lat ? `${r.lat}, ${r.lng}` : '—';
+      const error  = r.error ? `<span class="error-msg">${r.error}</span>` : '—';
+
+      tr.innerHTML = `
+        <td>${r.name}</td>
+        <td>${r.address}</td>
+        <td>${statusBadge}</td>
+        <td>${coords}</td>
+        <td>${error}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    // Warn if there are failures
+    const commitBtn = document.getElementById('btn-commit');
+    const warning   = document.getElementById('commit-warning');
+    if (data.failed > 0) {
+      warning.textContent = `⚠ ${data.failed} adres se nepodařilo geokódovat — zobrazí se na mapě bez špendlíku.`;
+    } else {
+      warning.textContent = '';
+    }
+  }
+
+  async function commitCSV() {
+    const res = await fetch(`${API}/admin/commit`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      showSuccess(`✓ ${data.message}`);
+      resetUpload();
+      loadStatus();
+    } else {
+      showError(data.error || 'Chyba při ukládání');
+    }
+  }
+
+  function resetUpload() {
+    chosenFile = null;
+    document.getElementById('file-input').value = '';
+    document.getElementById('file-name').classList.add('hidden');
+    document.getElementById('btn-validate').disabled = true;
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('step-validating').classList.add('hidden');
+    document.getElementById('step-results').classList.add('hidden');
+    document.getElementById('step-upload').classList.remove('hidden');
+    document.getElementById('results-body').innerHTML = '';
+  }
+
+  // ── Alerts ────────────────────────────────────────────────────────────────
+
+  function showError(msg) {
+    const el = document.getElementById('upload-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function showSuccess(msg) {
+    const el = document.getElementById('upload-success');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function hideAlerts() {
+    document.getElementById('upload-error').style.display = 'none';
+    document.getElementById('upload-success').style.display = 'none';
+  }
+
+  // Enter key on login
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !document.getElementById('login-screen').classList.contains('hidden')) {
+      login();
+    }
+  });
+
+  // Check if already logged in on page load
+  checkLogin();
+</script>
+</body>
+</html>

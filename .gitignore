@@ -1,0 +1,32 @@
+# Environment & secrets
+.env
+*.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Data files (obsahují citlivá data školy)
+backend/data/data_source.csv
+backend/data/geocode_cache.json
+backend/data/pending.csv
+
+# Node
+node_modules/
+frontend/dist/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
