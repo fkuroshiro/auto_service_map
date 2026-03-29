@@ -48,29 +48,59 @@ def save_cache(cache):
 
 def parse_csv(content):
     """
-    Parse CSV into list of active businesses.
-    Columns: Firma(0), Ulice(1), Město(2), Web(3), Aktivní/Neaktivní(4)
-    Skips rows where column 4 is 'TRUE' (= neaktivní).
-    Only counts truly empty/malformed rows toward the stop condition.
+    Parse the new Excel-exported CSV format into a list of active businesses.
+
+    The file has a variable-length header block followed by a marker row
+    containing the column aliases used as a schema map:
+        name | street | city | psc | web | isActive  (columns 0-5)
+
+    Data rows start immediately after that marker row.
+    Only rows where isActive == '1' are included.
+    Parsing stops after 4 consecutive empty/malformed rows.
     """
     content = content.replace('\r\r\n', '\n').replace('\r\n', '\n').replace('\r', '\n')
-    businesses, started, empty = [], False, 0
-    for row in csv.reader(io.StringIO(content), delimiter=';'):
+
+    businesses = []
+    started    = False
+    empty      = 0
+
+    # Column indices — resolved once the header row is found
+    COL_NAME     = 0
+    COL_STREET   = 1
+    COL_CITY     = 2
+    COL_PSC      = 3
+    COL_WEB      = 4
+    COL_ACTIVE   = 5
+
+    for row in csv.reader(io.StringIO(content), delimiter=','):
         if not started:
-            if row and 'Firma' in row[0]:
+            # The marker row has 'name' in col 0 and 'isActive' in col 5
+            if len(row) > COL_ACTIVE and row[COL_NAME].strip() == 'name' and row[COL_ACTIVE].strip() == 'isActive':
                 started = True
             continue
-        if len(row) >= 4:
-            name, street, city, web = (c.strip() for c in row[:4])
-            inactive = len(row) >= 5 and row[4].strip().upper() == 'TRUE'
-            if name and street and city and name.lower() not in ('firma', 'celkem'):
-                empty = 0  # reset empty counter for any valid row, active or not
-                if not inactive:
-                    businesses.append({'name': name, 'address': f'{street}, {city}', 'web': web})
+
+        # Require at least name + street + city + isActive columns
+        if len(row) > COL_ACTIVE:
+            name     = row[COL_NAME].strip()
+            street   = row[COL_STREET].strip()
+            city     = row[COL_CITY].strip()
+            web      = row[COL_WEB].strip() if len(row) > COL_WEB else ''
+            is_active = row[COL_ACTIVE].strip()
+
+            if name and street and city:
+                empty = 0  # valid row — reset empty counter regardless of active flag
+                if is_active == '1':
+                    businesses.append({
+                        'name':    name,
+                        'address': f'{street}, {city}',
+                        'web':     web,
+                    })
                 continue
+
         empty += 1
         if empty >= 4:
             break
+
     return businesses
 
 def read_csv():
@@ -106,6 +136,47 @@ def geocode_all(businesses):
     for b in businesses:
         if not cache.get(b['address'], {}).get('lat'):
             cache[b['address']] = geocode(b['address'])
+    save_cache(cache)
+    return cache
+
+def diff_and_update_cache(old_businesses, new_businesses):
+    """
+    Compare old vs new business lists and return a pruned, updated cache.
+
+    - Addresses present in new but missing from cache  → geocoded (new entries)
+    - Addresses present in old but absent from new     → removed from cache
+    - Addresses present in both                        → cache entry kept as-is
+
+    Returns the updated cache dict (already saved to disk).
+    """
+    old_addresses = {b['address'] for b in old_businesses}
+    new_addresses = {b['address'] for b in new_businesses}
+
+    added   = new_addresses - old_addresses
+    removed = old_addresses - new_addresses
+    kept    = old_addresses & new_addresses
+
+    log.info(
+        "Diff: %d zachováno, %d přidáno, %d odstraněno",
+        len(kept), len(added), len(removed),
+    )
+
+    cache = load_cache()
+
+    # Drop stale entries
+    for addr in removed:
+        cache.pop(addr, None)
+        log.info("Cache: odstraněno '%s'", addr)
+
+    # Geocode new entries
+    for addr in added:
+        result = geocode(addr)
+        cache[addr] = result
+        if result.get('lat'):
+            log.info("Cache: geokódováno '%s'", addr)
+        else:
+            log.warning("Cache: geokódování selhalo '%s' – %s", addr, result.get('error'))
+
     save_cache(cache)
     return cache
 
@@ -166,7 +237,7 @@ def admin_validate():
     content    = file.read().decode('utf-8-sig')
     businesses = parse_csv(content)
     if not businesses:
-        return jsonify({'error': "CSV musí obsahovat řádek s 'Firma'"}), 400
+        return jsonify({'error': "CSV musí obsahovat řádek s 'name' a 'isActive'"}), 400
 
     cache, results, failed = load_cache(), [], 0
     for b in businesses:
@@ -199,9 +270,13 @@ def admin_commit():
     with open(PENDING_CSV_PATH, encoding='utf-8-sig') as f:
         pending = f.read()
 
-    businesses = parse_csv(pending)
-    cache      = geocode_all(businesses)
+    new_businesses = parse_csv(pending)
+    old_businesses = read_csv()  # current live data before overwrite
 
+    # Diff old vs new: prune removed addresses, geocode added ones
+    cache = diff_and_update_cache(old_businesses, new_businesses)
+
+    # Persist the new CSV as the live data source
     os.makedirs(os.path.dirname(CSV_FILE_PATH), exist_ok=True)
     with open(CSV_FILE_PATH, 'w', encoding='utf-8-sig') as f:
         f.write(pending)
@@ -209,10 +284,26 @@ def admin_commit():
     session.pop('pending', None)
     os.remove(PENDING_CSV_PATH)
 
-    geocoded = sum(1 for b in businesses if cache.get(b['address'], {}).get('lat'))
-    log.info("Commit: %d/%d geokódováno", geocoded, len(businesses))
-    return jsonify({'ok': True, 'total': len(businesses), 'geocoded': geocoded,
-                    'message': f'CSV uložen. {geocoded}/{len(businesses)} adres geokódováno.'})
+    old_addresses = {b['address'] for b in old_businesses}
+    new_addresses = {b['address'] for b in new_businesses}
+    added         = len(new_addresses - old_addresses)
+    removed       = len(old_addresses - new_addresses)
+    geocoded      = sum(1 for b in new_businesses if cache.get(b['address'], {}).get('lat'))
+
+    log.info("Commit: %d/%d geokódováno, +%d přidáno, -%d odstraněno",
+             geocoded, len(new_businesses), added, removed)
+
+    return jsonify({
+        'ok':       True,
+        'total':    len(new_businesses),
+        'geocoded': geocoded,
+        'added':    added,
+        'removed':  removed,
+        'message':  (
+            f'CSV uložen. {geocoded}/{len(new_businesses)} adres geokódováno. '
+            f'+{added} nových, -{removed} odstraněných provozoven.'
+        ),
+    })
 
 # ── Static ────────────────────────────────────────────────────────────────────
 
