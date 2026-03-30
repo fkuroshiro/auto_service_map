@@ -3,7 +3,7 @@ import L from "leaflet";
 import markerIcon    from "leaflet/dist/images/marker-icon.png";
 import markerShadow  from "leaflet/dist/images/marker-shadow.png";
 import markerIcon2x  from "leaflet/dist/images/marker-icon-2x.png";
-import "./Main.css";
+import "./main.css";
 
 // Fix Leaflet default marker icons in Vite
 delete L.Icon.Default.prototype._getIconUrl;

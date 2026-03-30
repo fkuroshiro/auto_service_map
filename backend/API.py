@@ -1,7 +1,7 @@
-from flask import Flask, jsonify, request, session, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
-import csv, os, json, urllib.request, urllib.parse, hashlib, io, logging
+import csv, os, json, urllib.request, urllib.parse, hashlib, hmac, secrets, io, logging
 
 load_dotenv()
 
@@ -11,9 +11,7 @@ log = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-app.secret_key = os.getenv('SECRET_KEY')
-if not app.secret_key:
-    raise RuntimeError("SECRET_KEY chybí v .env")
+app.secret_key = os.getenv('SECRET_KEY')  # kept for any future use
 
 BASE_DIR            = os.path.dirname(os.path.abspath(__file__))
 CSV_FILE_PATH       = os.path.join(BASE_DIR, 'data', 'data_source.csv')
@@ -23,16 +21,33 @@ MAPYCZ_API_KEY      = os.getenv('MAPYCZ_API_KEY')
 ADMIN_USERNAME      = os.getenv('ADMIN_USERNAME')
 ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH')
 
-for key in ('MAPYCZ_API_KEY', 'ADMIN_USERNAME', 'ADMIN_PASSWORD_HASH'):
+for key in ('SECRET_KEY', 'MAPYCZ_API_KEY', 'ADMIN_USERNAME', 'ADMIN_PASSWORD_HASH'):
     if not os.getenv(key):
         raise RuntimeError(f"{key} chybí v .env")
 
-SESSION_KEY = hashlib.sha256(ADMIN_USERNAME.encode()).hexdigest()[:16]
+# ── In-memory token store ─────────────────────────────────────────────────────
+# Maps token → {'pending': bool}
+# Resets on server restart — intentional, forces re-login after deploy.
+_tokens: dict = {}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def is_logged_in():
-    return session.get(SESSION_KEY) is True
+def _get_token() -> str | None:
+    """Extract token from custom header (Cloudflare strips Authorization)."""
+    return request.headers.get('X-Admin-Token') or None
+
+def is_logged_in() -> bool:
+    token = _get_token()
+    return token is not None and token in _tokens
+
+def get_token_data() -> dict:
+    token = _get_token()
+    return _tokens.get(token, {}) if token else {}
+
+def set_token_data(key: str, value) -> None:
+    token = _get_token()
+    if token and token in _tokens:
+        _tokens[token][key] = value
 
 def load_cache():
     try:
@@ -64,31 +79,28 @@ def parse_csv(content):
     started    = False
     empty      = 0
 
-    # Column indices — resolved once the header row is found
-    COL_NAME     = 0
-    COL_STREET   = 1
-    COL_CITY     = 2
-    COL_PSC      = 3
-    COL_WEB      = 4
-    COL_ACTIVE   = 5
+    COL_NAME   = 0
+    COL_STREET = 1
+    COL_CITY   = 2
+    COL_PSC    = 3
+    COL_WEB    = 4
+    COL_ACTIVE = 5
 
     for row in csv.reader(io.StringIO(content), delimiter=','):
         if not started:
-            # The marker row has 'name' in col 0 and 'isActive' in col 5
             if len(row) > COL_ACTIVE and row[COL_NAME].strip() == 'name' and row[COL_ACTIVE].strip() == 'isActive':
                 started = True
             continue
 
-        # Require at least name + street + city + isActive columns
         if len(row) > COL_ACTIVE:
-            name     = row[COL_NAME].strip()
-            street   = row[COL_STREET].strip()
-            city     = row[COL_CITY].strip()
-            web      = row[COL_WEB].strip() if len(row) > COL_WEB else ''
+            name      = row[COL_NAME].strip()
+            street    = row[COL_STREET].strip()
+            city      = row[COL_CITY].strip()
+            web       = row[COL_WEB].strip() if len(row) > COL_WEB else ''
             is_active = row[COL_ACTIVE].strip()
 
             if name and street and city:
-                empty = 0  # valid row — reset empty counter regardless of active flag
+                empty = 0
                 if is_active == '1':
                     businesses.append({
                         'name':    name,
@@ -146,8 +158,6 @@ def diff_and_update_cache(old_businesses, new_businesses):
     - Addresses present in new but missing from cache  → geocoded (new entries)
     - Addresses present in old but absent from new     → removed from cache
     - Addresses present in both                        → cache entry kept as-is
-
-    Returns the updated cache dict (already saved to disk).
     """
     old_addresses = {b['address'] for b in old_businesses}
     new_addresses = {b['address'] for b in new_businesses}
@@ -156,19 +166,14 @@ def diff_and_update_cache(old_businesses, new_businesses):
     removed = old_addresses - new_addresses
     kept    = old_addresses & new_addresses
 
-    log.info(
-        "Diff: %d zachováno, %d přidáno, %d odstraněno",
-        len(kept), len(added), len(removed),
-    )
+    log.info("Diff: %d zachováno, %d přidáno, %d odstraněno", len(kept), len(added), len(removed))
 
     cache = load_cache()
 
-    # Drop stale entries
     for addr in removed:
         cache.pop(addr, None)
         log.info("Cache: odstraněno '%s'", addr)
 
-    # Geocode new entries
     for addr in added:
         result = geocode(addr)
         cache[addr] = result
@@ -206,17 +211,20 @@ def admin_login():
     password = data.get('password', '')
     pw_hash  = hashlib.sha256(password.encode()).hexdigest()
 
-    if username == ADMIN_USERNAME and pw_hash == ADMIN_PASSWORD_HASH:
-        session[SESSION_KEY] = True
+    if username == ADMIN_USERNAME and hmac.compare_digest(pw_hash, ADMIN_PASSWORD_HASH):
+        token = secrets.token_hex(32)
+        _tokens[token] = {'pending': False}
         log.info("Admin login: %s", username)
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'token': token})
 
     log.warning("Failed login: %s", username)
     return jsonify({'ok': False, 'error': 'Nesprávné jméno nebo heslo'}), 401
 
 @app.route('/api/admin/logout', methods=['POST'])
 def admin_logout():
-    session.clear()
+    token = _get_token()
+    if token:
+        _tokens.pop(token, None)
     return jsonify({'ok': True})
 
 @app.route('/api/admin/me')
@@ -253,10 +261,16 @@ def admin_validate():
                 failed += 1
                 results.append({**b, 'status': 'failed', 'lat': None, 'lng': None, 'cached': False, 'error': geo.get('error')})
 
+    # Ulož nově geokódované výsledky do cache hned při validate
+    for r in results:
+        if r['status'] == 'ok' and not r['cached']:
+            cache[r['address']] = {'lat': r['lat'], 'lng': r['lng']}
+    save_cache(cache)
+
     os.makedirs(os.path.dirname(PENDING_CSV_PATH), exist_ok=True)
     with open(PENDING_CSV_PATH, 'w', encoding='utf-8-sig') as f:
         f.write(content)
-    session['pending'] = True
+    set_token_data('pending', True)
 
     return jsonify({'total': len(results), 'ok': len(results) - failed, 'failed': failed, 'results': results})
 
@@ -264,24 +278,22 @@ def admin_validate():
 def admin_commit():
     if not is_logged_in():
         return jsonify({'error': 'Unauthorized'}), 401
-    if not session.get('pending') or not os.path.exists(PENDING_CSV_PATH):
+    if not get_token_data().get('pending') or not os.path.exists(PENDING_CSV_PATH):
         return jsonify({'error': 'Nejdřív spusť /validate'}), 400
 
     with open(PENDING_CSV_PATH, encoding='utf-8-sig') as f:
         pending = f.read()
 
     new_businesses = parse_csv(pending)
-    old_businesses = read_csv()  # current live data before overwrite
+    old_businesses = read_csv()
 
-    # Diff old vs new: prune removed addresses, geocode added ones
     cache = diff_and_update_cache(old_businesses, new_businesses)
 
-    # Persist the new CSV as the live data source
     os.makedirs(os.path.dirname(CSV_FILE_PATH), exist_ok=True)
     with open(CSV_FILE_PATH, 'w', encoding='utf-8-sig') as f:
         f.write(pending)
 
-    session.pop('pending', None)
+    set_token_data('pending', False)
     os.remove(PENDING_CSV_PATH)
 
     old_addresses = {b['address'] for b in old_businesses}
