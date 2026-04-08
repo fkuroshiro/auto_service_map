@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-app.secret_key = os.getenv('SECRET_KEY')  # kept for any future use
+app.secret_key = os.getenv('SECRET_KEY')  # ponecháno pro budoucí použití
 
 BASE_DIR            = os.path.dirname(os.path.abspath(__file__))
 CSV_FILE_PATH       = os.path.join(BASE_DIR, 'data', 'data_source.csv')
@@ -26,14 +26,14 @@ for key in ('SECRET_KEY', 'MAPYCZ_API_KEY', 'ADMIN_USERNAME', 'ADMIN_PASSWORD_HA
         raise RuntimeError(f"{key} chybí v .env")
 
 # ── In-memory token store ─────────────────────────────────────────────────────
-# Maps token → {'pending': bool}
-# Resets on server restart — intentional, forces re-login after deploy.
+# Mapuje token → {'pending': bool}
+# Resetuje se při restartu serveru.
 _tokens: dict = {}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_token() -> str | None:
-    """Extract token from custom header (Cloudflare strips Authorization)."""
+    """Extrahuje token z vlastního headeru (Cloudflare někdy maže Authorization)."""
     return request.headers.get('X-Admin-Token') or None
 
 def is_logged_in() -> bool:
@@ -63,16 +63,12 @@ def save_cache(cache):
 
 def parse_csv(content):
     """
-    Parse the new Excel-exported CSV format into a list of active businesses.
-
-    The file has a variable-length header block followed by a marker row
-    containing the column aliases used as a schema map:
-        name | street | city | psc | web | isActive  (columns 0-5)
-
-    Data rows start immediately after that marker row.
-    Only rows where isActive == '1' are included.
-    Parsing stops after 4 consecutive empty/malformed rows.
+    Parsování CSV formátu se středníkem (;) jako oddělovačem.
+    
+    Očekávané sloupce: name | street | city | psc | web | isActive
+    Pouze řádky s isActive == '1' jsou zahrnuty.
     """
+    # Normalizace konců řádků
     content = content.replace('\r\r\n', '\n').replace('\r\n', '\n').replace('\r', '\n')
 
     businesses = []
@@ -86,8 +82,10 @@ def parse_csv(content):
     COL_WEB    = 4
     COL_ACTIVE = 5
 
-    for row in csv.reader(io.StringIO(content), delimiter=','):
+    # KLÍČOVÁ ZMĚNA: delimiter=';'
+    for row in csv.reader(io.StringIO(content), delimiter=';'):
         if not started:
+            # Hledáme hlavičku pro start parsování
             if len(row) > COL_ACTIVE and row[COL_NAME].strip() == 'name' and row[COL_ACTIVE].strip() == 'isActive':
                 started = True
             continue
@@ -143,22 +141,7 @@ def geocode(address):
     except Exception as e:
         return {'lat': None, 'lng': None, 'error': str(e)}
 
-def geocode_all(businesses):
-    cache = load_cache()
-    for b in businesses:
-        if not cache.get(b['address'], {}).get('lat'):
-            cache[b['address']] = geocode(b['address'])
-    save_cache(cache)
-    return cache
-
 def diff_and_update_cache(old_businesses, new_businesses):
-    """
-    Compare old vs new business lists and return a pruned, updated cache.
-
-    - Addresses present in new but missing from cache  → geocoded (new entries)
-    - Addresses present in old but absent from new     → removed from cache
-    - Addresses present in both                        → cache entry kept as-is
-    """
     old_addresses = {b['address'] for b in old_businesses}
     new_addresses = {b['address'] for b in new_businesses}
 
@@ -211,6 +194,10 @@ def admin_login():
     password = data.get('password', '')
     pw_hash  = hashlib.sha256(password.encode()).hexdigest()
 
+    if not ADMIN_PASSWORD_HASH:
+        log.error("ADMIN_PASSWORD_HASH není nastaven v prostředí!")
+        return jsonify({'ok': False, 'error': 'Chyba serveru'}), 500
+
     if username == ADMIN_USERNAME and hmac.compare_digest(pw_hash, ADMIN_PASSWORD_HASH):
         token = secrets.token_hex(32)
         _tokens[token] = {'pending': False}
@@ -238,41 +225,73 @@ def admin_validate():
     if not is_logged_in():
         return jsonify({'error': 'Unauthorized'}), 401
 
-    file = request.files.get('file')
-    if not file or not file.filename.endswith('.csv'):
-        return jsonify({'error': 'Nahraj .csv soubor'}), 400
+    if 'file' not in request.files:
+        return jsonify({'error': 'V požadavku chybí soubor (klíč "file")'}), 400
 
-    content    = file.read().decode('utf-8-sig')
-    businesses = parse_csv(content)
-    if not businesses:
-        return jsonify({'error': "CSV musí obsahovat řádek s 'name' a 'isActive'"}), 400
+    file = request.files['file']
+    
+    # iPhone může mít prázdný název souboru nebo divnou příponu
+    filename = getattr(file, 'filename', '')
+    if not filename or filename == '':
+        return jsonify({'error': 'Nebyl vybrán žádný soubor'}), 400
 
-    cache, results, failed = load_cache(), [], 0
-    for b in businesses:
-        addr   = b['address']
-        cached = cache.get(addr, {})
-        if cached.get('lat'):
-            results.append({**b, 'status': 'ok', 'lat': cached['lat'], 'lng': cached['lng'], 'cached': True, 'error': None})
-        else:
-            geo = geocode(addr)
-            if geo.get('lat'):
-                results.append({**b, 'status': 'ok', 'lat': geo['lat'], 'lng': geo['lng'], 'cached': False, 'error': None})
+    # Kontrola přípony (case-insensitive)
+    if not filename.lower().endswith('.csv'):
+        return jsonify({'error': f'Soubor "{filename}" není CSV'}), 400
+
+    try:
+        # Přečteme binární data
+        raw_data = file.read()
+        
+        # Zkusíme detekovat kódování (priorita utf-8-sig pro Excel, pak utf-8, pak cp1250)
+        content = ""
+        for encoding in ['utf-8-sig', 'utf-8', 'cp1250', 'latin1']:
+            try:
+                content = raw_data.decode(encoding)
+                log.info(f"Soubor úspěšně dekódován pomocí {encoding}")
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if not content:
+            return jsonify({'error': 'Nepodařilo se přečíst kódování souboru'}), 400
+
+        businesses = parse_csv(content)
+        
+        if not businesses:
+            # Častá chyba na mobilu: špatný oddělovač (čárka vs středník)
+            return jsonify({'error': "V souboru nebyla nalezena žádná data. Zkontrolujte, zda používáte středník (;) jako oddělovač."}), 400
+
+        # --- Zbytek logiky zůstává stejný ---
+        cache, results, failed = load_cache(), [], 0
+        for b in businesses:
+            addr = b['address']
+            cached = cache.get(addr, {})
+            if cached.get('lat'):
+                results.append({**b, 'status': 'ok', 'lat': cached['lat'], 'lng': cached['lng'], 'cached': True, 'error': None})
             else:
-                failed += 1
-                results.append({**b, 'status': 'failed', 'lat': None, 'lng': None, 'cached': False, 'error': geo.get('error')})
+                geo = geocode(addr)
+                if geo.get('lat'):
+                    results.append({**b, 'status': 'ok', 'lat': geo['lat'], 'lng': geo['lng'], 'cached': False, 'error': None})
+                else:
+                    failed += 1
+                    results.append({**b, 'status': 'failed', 'lat': None, 'lng': None, 'cached': False, 'error': geo.get('error')})
 
-    # Ulož nově geokódované výsledky do cache hned při validate
-    for r in results:
-        if r['status'] == 'ok' and not r['cached']:
-            cache[r['address']] = {'lat': r['lat'], 'lng': r['lng']}
-    save_cache(cache)
+        for r in results:
+            if r['status'] == 'ok' and not r['cached']:
+                cache[r['address']] = {'lat': r['lat'], 'lng': r['lng']}
+        save_cache(cache)
 
-    os.makedirs(os.path.dirname(PENDING_CSV_PATH), exist_ok=True)
-    with open(PENDING_CSV_PATH, 'w', encoding='utf-8-sig') as f:
-        f.write(content)
-    set_token_data('pending', True)
+        os.makedirs(os.path.dirname(PENDING_CSV_PATH), exist_ok=True)
+        with open(PENDING_CSV_PATH, 'w', encoding='utf-8-sig') as f:
+            f.write(content)
+        set_token_data('pending', True)
 
-    return jsonify({'total': len(results), 'ok': len(results) - failed, 'failed': failed, 'results': results})
+        return jsonify({'total': len(results), 'ok': len(results) - failed, 'failed': failed, 'results': results})
+
+    except Exception as e:
+        log.error(f"Chyba při zpracování uploadu: {str(e)}")
+        return jsonify({'error': f'Interní chyba serveru: {str(e)}'}), 500
 
 @app.route('/api/admin/commit', methods=['POST'])
 def admin_commit():
@@ -303,7 +322,7 @@ def admin_commit():
     geocoded      = sum(1 for b in new_businesses if cache.get(b['address'], {}).get('lat'))
 
     log.info("Commit: %d/%d geokódováno, +%d přidáno, -%d odstraněno",
-             geocoded, len(new_businesses), added, removed)
+              geocoded, len(new_businesses), added, removed)
 
     return jsonify({
         'ok':       True,

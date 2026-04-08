@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import Main from "./components/Main.jsx";
+import Footer from "./components/Footer.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5000/api/map-data";
 
@@ -69,6 +70,7 @@ export default function App() {
         loading={loading}
         error={error}
       />
+      <Footer />
     </div>
   );
 }

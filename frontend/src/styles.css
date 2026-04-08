@@ -2,9 +2,11 @@
 
 /* ── CSS VARIABLES ────────────────────────────────────── */
 :root {
-  --teal:      #00A89D;
+  --teal:      #40B8B4;
   --teal-dark: #007a6e;
-  --navy:      #1a2a4a;
+  --color1: #B7D852;
+  --color2: #8D96AF;
+  --navy:      #202857;
   --gray-bg:   #f2f2f2;
   --gray-mid:  #cccccc;
   --gray-text: #666666;

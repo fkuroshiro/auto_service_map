@@ -1,0 +1,149 @@
+/* Import fontů, pokud je ještě nemáš v main.js */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Open+Sans:wght@400;600&display=swap');
+
+.school-footer {
+  background-color: #b3b3b3;
+  color: #ffffff;
+  padding: 50px 0 30px 0;
+  font-family: 'Open Sans', sans-serif;
+  width: 100%;
+}
+
+.footer-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.footer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 40px;
+  margin-bottom: 40px;
+}
+
+.footer-col h3 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: 0.05em;
+  margin-bottom: 25px;
+  text-transform: uppercase;
+}
+
+.footer-col ul {
+  list-style: none;
+  padding: 0;
+}
+
+.footer-col ul li {
+  margin-bottom: 10px;
+}
+
+.footer-col a, .footer-col address, .footer-col p {
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 1.6;
+  font-style: normal;
+}
+
+.footer-col a:hover {
+  text-decoration: underline;
+}
+
+.ms-logo-wrapper {
+  margin: 15px 0;
+}
+
+.ms-logo-wrapper img {
+  width: 110px;
+  filter: brightness(0) invert(1); /* Bílé logo */
+}
+
+/* Tlačítka s ohraničením */
+.footer-action-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 25px;
+}
+
+.btn-outline {
+  display: block;
+  border: 1.5px solid #ffffff;
+  padding: 10px 18px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  text-align: center;
+  letter-spacing: 0.08em;
+  transition: all 0.25s ease;
+  width: fit-content;
+}
+
+.btn-outline:hover {
+  background-color: #ffffff;
+  color: #b3b3b3 !important;
+  text-decoration: none !important;
+}
+
+.footer-line {
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+  margin-bottom: 30px;
+}
+
+/* Sociální ikony */
+.footer-social-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+.social-links {
+  display: flex;
+  gap: 15px;
+}
+
+.s-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 18px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.s-icon:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.s-icon.fb { background-color: #002d72; }
+.s-icon.yt { background-color: #00ced1; }
+.s-icon.in { background-color: #00a0a0; }
+.s-icon.ig { background-color: #c4d600; }
+
+/* Responzivita */
+@media (max-width: 768px) {
+  .footer-grid {
+    text-align: center;
+  }
+  
+  .btn-outline {
+    margin: 0 auto;
+  }
+
+  .footer-social-section {
+    flex-direction: column;
+    gap: 15px;
+  }
+}

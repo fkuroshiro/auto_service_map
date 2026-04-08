@@ -8,8 +8,8 @@
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600&display=swap');
 
     :root {
-      --teal: #009B8D; --teal-dark: #007a6e;
-      --navy: #1a2a4a; --gray: #f4f4f4;
+      --teal: #40B8B4; --teal-dark: #007a6e;
+      --navy: #202857; --gray: #f4f4f4;
       --red: #c0392b; --green: #27ae60;
       --font-head: 'Montserrat', sans-serif;
       --font-body: 'Open Sans', sans-serif;
@@ -26,8 +26,8 @@
     .card { background: white; border-radius: 2px; box-shadow: 0 2px 12px rgba(0,0,0,.07); padding: 32px; margin: 32px auto; max-width: 900px; }
     .card h2 { font-family: var(--font-head); font-size: 16px; font-weight: 700; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid var(--teal); }
 
-    #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-    .login-box { background: white; padding: 48px; width: 380px; box-shadow: 0 4px 24px rgba(0,0,0,.1); }
+    #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .login-box { background: white; padding: 48px; width: 100%; max-width: 380px; box-shadow: 0 4px 24px rgba(0,0,0,.1); }
     .login-box h2 { font-family: var(--font-head); font-size: 20px; font-weight: 800; margin-bottom: 8px; }
     .login-box p { font-size: 13px; color: #777; margin-bottom: 28px; }
     .login-box label { font-family: var(--font-head); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; display: block; margin-bottom: 6px; }
@@ -87,6 +87,38 @@
     .alert-success { background: #eafaf1; color: var(--green); border-left: 3px solid var(--green); }
 
     .hidden { display: none !important; }
+
+    /* ── Úpravy pro responzivitu (Mobile) ── */
+    @media (max-width: 600px) {
+      .topbar { padding: 12px 16px; }
+      .topbar h1 { font-size: 14px; }
+      .btn-logout { font-size: 10px; padding: 5px 10px; }
+
+      .card { padding: 20px; margin: 16px auto; width: calc(100% - 32px); }
+      .card h2 { font-size: 15px; margin-bottom: 16px; }
+
+      .login-box { padding: 32px 24px; }
+      .login-box h2 { font-size: 18px; }
+      .login-box p { margin-bottom: 20px; }
+
+      .results-summary { flex-direction: column; gap: 12px; margin-bottom: 16px; }
+      .summary-box { padding: 12px; }
+      .summary-box .num { font-size: 24px; }
+      .summary-box .lbl { font-size: 11px; }
+
+      .upload-area { padding: 24px 16px; }
+      .upload-area strong { font-size: 14px; }
+      .upload-area p { font-size: 12px; }
+
+      /* Umožní skrolovat tabulku horizontálně, pokud se nevejde */
+      .table-scroll { overflow-x: auto; }
+      .results-table { min-width: 500px; } /* Vynutí minimální šířku pro skroling */
+      .results-table th, .results-table td { padding: 8px; font-size: 12px; }
+
+      .action-row { flex-direction: column; gap: 10px; align-items: stretch; }
+      .action-row .btn { width: 100%; text-align: center; }
+      .action-row p { text-align: center; font-size: 11px; }
+    }
   </style>
 </head>
 <body>
