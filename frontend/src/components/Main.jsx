@@ -1,20 +1,17 @@
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
-import markerIcon    from "leaflet/dist/images/marker-icon.png";
-import markerShadow  from "leaflet/dist/images/marker-shadow.png";
-import markerIcon2x  from "leaflet/dist/images/marker-icon-2x.png";
+import IconImg from '../../public/pin.png';
 import "./main.css";
 
-// Fix Leaflet default marker icons in Vite
 delete L.Icon.Default.prototype._getIconUrl;
+
 L.Icon.Default.mergeOptions({
-  iconUrl:       markerIcon,
-  iconRetinaUrl: markerIcon2x,
-  shadowUrl:     markerShadow,
-  iconSize:      [25, 41],
-  iconAnchor:    [12, 41],
-  popupAnchor:   [1, -34],
-  shadowSize:    [41, 41],
+  iconUrl: IconImg,
+  iconRetinaUrl: IconImg,
+  shadowUrl: null, 
+  iconSize: [28, 28],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -16],
 });
 
 /** Normalize a bare URL to include https:// */

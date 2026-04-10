@@ -1,8 +1,9 @@
 import { useMemo, useState, useEffect } from "react";
+import Header from "./components/Header.jsx";
 import Main from "./components/Main.jsx";
 import Footer from "./components/Footer.jsx";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5000/api/map-data";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000/api/map-data";
 
 export default function App() {
   const [services, setServices]               = useState([]);
@@ -61,6 +62,7 @@ export default function App() {
 
   return (
     <div className="page">
+      <Header />
       <Main
         services={filtered}
         selectedService={safeSelected}
