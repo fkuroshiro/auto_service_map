@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="shortcut icon" href="skolahostivar.ico" type="image/x-icon">
   <title>Admin – Weilovka Mapa</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600&display=swap');
@@ -88,6 +89,49 @@
 
     .hidden { display: none !important; }
 
+    .btn-loading { position: relative; color: transparent !important; pointer-events: none; }
+    .btn-loading::after {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 14px; height: 14px;
+      margin: -7px 0 0 -7px;
+      border: 2px solid rgba(255,255,255,.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    .btn-outline.btn-loading::after { border-color: rgba(64,184,180,.3); border-top-color: var(--teal); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #commit-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(32,40,87,.55);
+      backdrop-filter: blur(2px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #commit-overlay.visible { display: flex; }
+    .commit-modal {
+      background: white;
+      padding: 40px 48px;
+      text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,.18);
+      min-width: 280px;
+    }
+    .commit-modal .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid #eee;
+      border-top-color: var(--teal);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 20px;
+    }
+    .commit-modal p { font-family: var(--font-head); font-size: 13px; font-weight: 700; letter-spacing: .05em; color: var(--navy); }
+    .commit-modal small { font-size: 12px; color: #999; margin-top: 6px; display: block; }
+
     /* ── Úpravy pro responzivitu (Mobile) ── */
     @media (max-width: 600px) {
       .topbar { padding: 12px 16px; }
@@ -133,6 +177,14 @@
     <label>Heslo</label>
     <input type="password" id="password" autocomplete="current-password" />
     <button class="btn btn-primary" style="width:100%" onclick="login()">Přihlásit se</button>
+  </div>
+</div>
+
+<div id="commit-overlay">
+  <div class="commit-modal">
+    <div class="spinner"></div>
+    <p>Ukládám data…</p>
+    <small>Prosím nevypínejte stránku</small>
   </div>
 </div>
 
@@ -210,6 +262,33 @@
   const authHeaders = () => ({ 'X-Admin-Token': getToken() });
   let chosenFile = null;
 
+  // ── Auth fetch wrapper ────────────────────────────────────────────────────
+  // Všechny autorizované requesty jdou přes authFetch — pokud server vrátí
+  // 401, token vypršel a uživatel je přesměrován na login.
+
+  async function authFetch(url, options = {}) {
+    const res = await fetch(url, {
+      ...options,
+      headers: { ...authHeaders(), ...(options.headers || {}) },
+    });
+    if (res.status === 401) {
+      sessionExpired();
+      throw new Error('session_expired');
+    }
+    return res;
+  }
+
+  function sessionExpired() {
+    localStorage.removeItem('weilovka_token');
+    document.getElementById('commit-overlay').classList.remove('visible');
+    document.getElementById('admin-panel').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+    const errEl = document.getElementById('login-error');
+    errEl.textContent = 'Vaše relace vypršela. Přihlaste se znovu.';
+    errEl.style.display = 'block';
+    resetUpload();
+  }
+
   // ── Auth ──────────────────────────────────────────────────────────────────
 
   async function checkLogin() {
@@ -226,7 +305,7 @@
 
     const res = await fetch(`${API}/admin/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
     const data = await res.json();
@@ -234,6 +313,7 @@
       localStorage.setItem('weilovka_token', data.token);
       showAdmin();
     } else {
+      errEl.textContent = data.error || 'Nesprávné jméno nebo heslo.';
       errEl.style.display = 'block';
     }
   }
@@ -290,6 +370,7 @@
   async function validateCSV() {
     if (!chosenFile) return;
     hideAlerts();
+    setBtn('btn-validate', true);
 
     document.getElementById('step-upload').classList.add('hidden');
     document.getElementById('step-validating').classList.remove('hidden');
@@ -305,9 +386,8 @@
     formData.append('file', chosenFile);
 
     try {
-      const res = await fetch(`${API}/admin/validate`, {
+      const res = await authFetch(`${API}/admin/validate`, {
         method: 'POST',
-        headers: authHeaders(),
         body: formData,
       });
       const data = await res.json();
@@ -324,7 +404,7 @@
 
     } catch (e) {
       clearInterval(ticker);
-      showError('Chyba připojení k serveru: ' + e.message);
+      if (e.message !== 'session_expired') showError('Chyba připojení k serveru: ' + e.message);
       resetUpload();
     }
   }
@@ -366,19 +446,33 @@
       : '';
   }
 
-  async function commitCSV() {
-    const res = await fetch(`${API}/admin/commit`, {
-      method: 'POST',
-      headers: authHeaders(),
-    });
-    const data = await res.json();
+  function setBtn(id, loading) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (loading) el.classList.add('btn-loading');
+    else el.classList.remove('btn-loading');
+    el.disabled = loading;
+  }
 
-    if (data.ok) {
-      showSuccess(`✓ ${data.message}`);
+  async function commitCSV() {
+    setBtn('btn-commit', true);
+    document.getElementById('commit-overlay').classList.add('visible');
+
+    try {
+      const res = await authFetch(`${API}/admin/commit`, { method: 'POST' });
+      const data = await res.json();
+
+      if (data.ok) {
+        showSuccess(`✓ ${data.message}`);
+      } else {
+        showError(data.error || 'Chyba při ukládání');
+      }
+    } catch (e) {
+      if (e.message !== 'session_expired') showError('Chyba připojení k serveru: ' + e.message);
+    } finally {
+      document.getElementById('commit-overlay').classList.remove('visible');
       resetUpload();
       loadStatus();
-    } else {
-      showError(data.error || 'Chyba při ukládání');
     }
   }
 
@@ -386,8 +480,11 @@
     chosenFile = null;
     document.getElementById('file-input').value = '';
     document.getElementById('file-name').classList.add('hidden');
-    document.getElementById('btn-validate').disabled = true;
+    const btnVal = document.getElementById('btn-validate');
+    btnVal.disabled = true;
+    btnVal.classList.remove('btn-loading');
     document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('progress-label').textContent = 'Pripravuji...';
     document.getElementById('step-validating').classList.add('hidden');
     document.getElementById('step-results').classList.add('hidden');
     document.getElementById('step-upload').classList.remove('hidden');
