@@ -1,5 +1,5 @@
 /* ── WRAPPER ──────────────────────────────────────────── */
-.main-content { background: var(--white); }
+.main-content { background: var(--white); padding: 48px 0px 64px;}
 
 .content-wrapper {
   max-width: 1400px;
@@ -9,10 +9,11 @@
 
 .section-title {
   font-family: var(--font-head);
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 500;
   color: var(--navy);
-  margin-bottom: 18px;
+  padding-bottom: 10px;
+  line-height: 1.3em;
 }
 
 /* ── LAYOUT ───────────────────────────────────────────── */
@@ -34,6 +35,7 @@
   font-size: 13px;
   outline: none;
   transition: border .2s;
+  box-sizing: border-box;
 }
 .filters__search:focus { border-color: var(--teal); }
 
@@ -41,7 +43,9 @@
 .service-panel__list {
   max-height: 440px;
   overflow-y: auto;
+  overflow-x: auto;
   border: 1px solid #e5e5e5;
+  -webkit-overflow-scrolling: touch;
 }
 .service-panel__list::-webkit-scrollbar { width: 4px; }
 .service-panel__list::-webkit-scrollbar-thumb { background: var(--teal); }
@@ -60,6 +64,7 @@
   border-bottom: 2px solid var(--teal);
   position: sticky;
   top: 0;
+  white-space: nowrap;
 }
 .service-table td {
   padding: 10px 14px;
@@ -122,8 +127,6 @@
 
 .popup-name { font-family: 'Montserrat', sans-serif; }
 
-
-
 /* ── STATES ───────────────────────────────────────────── */
 .state-box {
   display: flex;
@@ -137,9 +140,89 @@
 }
 .state-box--error { color: #c0392b; }
 
-/* ── RESPONSIVE ───────────────────────────────────────── */
+/* ── RESPONSIVE: Tablet ───────────────────────────────── */
 @media (max-width: 960px) {
   .content-wrapper { padding: 32px 20px 48px; }
-  .layout { grid-template-columns: 1fr; }
-  .map-container { height: 400px; }
+
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  /* On tablet, map goes below the left column */
+  .layout__right { order: 2; }
+  .layout__left  { order: 1; }
+
+  .map-container { height: 420px; }
+}
+
+/* ── RESPONSIVE: Mobile ───────────────────────────────── */
+@media (max-width: 560px) {
+  .content-wrapper {
+    padding: 24px 16px 40px;
+  }
+
+  .section-title {
+    font-size: 20px;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .layout__right { order: 2; }
+  .layout__left  { order: 1; }
+
+  .service-panel__list {
+    max-height: 320px;
+    overflow-x: hidden;
+  }
+
+  /* Hide Web column on mobile — name + address is enough */
+  .service-table th:nth-child(3),
+  .service-table td:nth-child(3) {
+    display: none;
+  }
+
+  /* Name column: fixed narrow width */
+  .service-table th:nth-child(1),
+  .service-table td:nth-child(1) {
+    width: 45%;
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Address column: takes remaining space, truncates */
+  .service-table th:nth-child(2),
+  .service-table td:nth-child(2) {
+    width: 55%;
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .service-table th,
+  .service-table td {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  .map-container {
+    height: 60dvh;
+    min-height: 280px;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .service-detail {
+    padding: 16px;
+  }
+
+  .btn-link {
+    font-size: 9px;
+    padding: 6px 12px;
+  }
 }

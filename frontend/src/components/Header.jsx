@@ -18,8 +18,8 @@ export default function Header() {
             </span>
             <span>Zpět</span>
           </a>
-          <p className="site-header__eyebrow">Informace</p>
-          <h1 className="site-header__title">
+          <h3 className="site-header__eyebrow z-10">Informace</h3>
+          <h1 className="site-header__title z-10">
             Praxe žáků<br />autooborů
           </h1>
         </div>

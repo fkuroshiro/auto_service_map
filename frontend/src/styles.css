@@ -27,6 +27,9 @@ html, body {
   color: var(--navy);
   background: var(--white);
 }
+body {
+  overflow-x: hidden
+}
 
 .page {
   display: flex;

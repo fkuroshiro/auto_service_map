@@ -91,7 +91,7 @@ export default function Main({
   return (
     <main className="main-content">
       <div className="content-wrapper">
-        <h2 className="section-title">Seznam firem pro praxi žáků autooborů</h2>
+        <h2 className="section-title"><b>Seznam firem pro praxi žáků autooborů</b></h2>
 
         {loading && <div className="state-box">Načítám data…</div>}
         {error   && <div className="state-box state-box--error">{error}</div>}
